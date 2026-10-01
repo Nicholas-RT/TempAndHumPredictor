@@ -1,3 +1,4 @@
+from math import ceil
 import os
 import time
 from datetime import datetime, timedelta
@@ -170,15 +171,6 @@ HORIZON_MAP = {
 
 
 def forecast(hours):
-    """Run iterative (rolling) forecasting for the given number of hours.
-
-    1. Start from the average of the latest 15 sensor readings.
-    2. Predict 1 hour ahead → use the prediction as input for the next step.
-    3. Repeat *hours* times, collecting each prediction point.
-
-    Returns:
-        list of dicts  [{ timestamp, temperature, humidity }, ...]
-    """
     sensor_data = get_latest_sensor_data(count=15)
     if sensor_data is None:
         return []
@@ -300,38 +292,57 @@ def predict():
                 "error": "Missing JSON body"
             }), 400
 
+        prev_temperature = float(data["temperature"])
+        prev_humidity = float(data["humidity"])
+
         temperature = float(data["temperature"])
         humidity = float(data["humidity"])
         time_minutes = float(data["time_minutes"])
+        start_time = datetime.fromisoformat(data["start_time"]) if data.get("start_time") else datetime.now()
 
-        X = build_features(
-            temperature=temperature,
-            humidity=humidity,
-            timestamp=datetime.now(),
-        )
+        time_hours = ceil(time_minutes / 60)
+        remaining_minutes = time_minutes % 60
+        i = 0
+        while(i < time_hours):
+            X = build_features(
+                temperature=temperature,
+                humidity=humidity,
+                timestamp= start_time + timedelta(hours=i),
+            )
+    
+            dmatrix = xgb.DMatrix(
+                X,
+                feature_names=list(X.columns)
+            )
+    
+            prediction = model.predict(dmatrix)
 
-        dmatrix = xgb.DMatrix(
-            X,
-            feature_names=list(X.columns)
-        )
+            prev_temperature = temperature
+            prev_humidity = humidity
+    
+            temperature = float(prediction[0][0])
+            humidity = float(prediction[0][1])
 
-        prediction = model.predict(dmatrix)
+            i += 1
 
-        future_temp = float(prediction[0][0])
-        future_humidity = float(prediction[0][1])
+        if(remaining_minutes != 0):
+            predicted_temp, predicted_humidity = interpolate_prediction(
+                current_temp=prev_temperature,
+                current_humidity=prev_humidity,
+                future_temp=temperature,
+                future_humidity=humidity,
+                minutes_ahead=remaining_minutes
+            )
 
-        predicted_temp, predicted_humidity = interpolate_prediction(
-            current_temp=temperature,
-            current_humidity=humidity,
-            future_temp=future_temp,
-            future_humidity=future_humidity,
-            minutes_ahead=time_minutes
-        )
+        else:
+            predicted_temp = temperature
+            predicted_humidity = humidity
 
         return jsonify({
             "requested_minutes": time_minutes,
             "temperature": round(predicted_temp, 3),
-            "humidity": round(predicted_humidity, 0)
+            "humidity": round(predicted_humidity, 0),
+            "A": 21
         })
 
     except KeyError as e:
