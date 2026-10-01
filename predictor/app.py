@@ -341,8 +341,7 @@ def predict():
         return jsonify({
             "requested_minutes": time_minutes,
             "temperature": round(predicted_temp, 3),
-            "humidity": round(predicted_humidity, 0),
-            "A": 21
+            "humidity": round(predicted_humidity, 0)
         })
 
     except KeyError as e:

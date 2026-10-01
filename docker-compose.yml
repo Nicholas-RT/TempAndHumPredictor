@@ -1,18 +1,4 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: sisf-postgres
-    environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5434:5432"
-    volumes:
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
   xgb-api:
     build:
       context: ./predictor
@@ -20,10 +6,6 @@ services:
     ports:
       - "5000:5000"
     restart: unless-stopped
-    depends_on:
-      - postgres
-    environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
 
 volumes:
   postgres_data:
